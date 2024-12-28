@@ -2,7 +2,7 @@
 // Load MODIS dataset, select bands, and filter for the desired date range (2001–2024)
 var modis = ee.ImageCollection("MODIS/061/MOD13Q1")
   .select(['sur_refl_b02', 'sur_refl_b01']) // Select NIR (sur_refl_b02) and RED (sur_refl_b01) bands
-  .filterDate('2000-01-01', '2024-11-31');
+  .filterDate('2001-01-01', '2024-11-30');
 
 // Define the soil adjustment factor (L)
 var L = 0.5;
@@ -24,7 +24,7 @@ var calculateSAVI = function(image) {
 var saviCollection = modis.map(calculateSAVI);
 
 // List of years (2001 to 2024)
-var years = ee.List.sequence(2000, 2024);
+var years = ee.List.sequence(2001, 2024);
 
 // Calculate annual mean SAVI for the ROI
 var annualMeanSAVI = years.map(function(year) {
@@ -55,7 +55,7 @@ var saviChart = ui.Chart.feature.byFeature({
   yProperties: ['SAVI']
 })
   .setOptions({
-    title: 'Annual Mean SAVI (2000–2024) in ROI',
+    title: 'Annual Mean SAVI (2001–2024) in ROI',
     hAxis: { title: 'Year', format: '####' },
     vAxis: { title: 'Mean SAVI' },
     lineWidth: 2,
@@ -74,7 +74,7 @@ Export.table.toDrive({
 });
 
 // Load data for a single year (2024) and calculate mean SAVI
-var modis_2024 = modis.filterDate('2014-01-01', '2024-11-31');
+var modis_2024 = modis.filterDate('2024-01-01', '2024-11-30');
 var average_savi_2024 = modis_2024.map(calculateSAVI).mean().clip(ROI);
 
 // Visualization parameters for SAVI
