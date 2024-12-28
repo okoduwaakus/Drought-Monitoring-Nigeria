@@ -1,7 +1,9 @@
+//Import the region of interest 
+
 // Load MODIS dataset and filter for the desired range (2001–2024)
 var modis = ee.ImageCollection("MODIS/061/MOD13Q1")
   .select('NDVI')
-  .filterDate('2000-03-01', '2024-10-30');
+  .filterDate('2001-01-01', '2024-11-30');
 
 // Scale the NDVI values
 var scaled_ndvi = modis.map(function(image) {
@@ -10,7 +12,7 @@ var scaled_ndvi = modis.map(function(image) {
 });
 
 // List of years
-var years = ee.List.sequence(2000, 2024);
+var years = ee.List.sequence(2001, 2024);
 
 // Calculate annual mean NDVI for the ROI
 var annualMeanNDVI = years.map(function(year) {
@@ -59,9 +61,9 @@ Export.table.toDrive({
   fileFormat: 'CSV'
 });
 
-// Load data for a single year (2023) and calculate mean EVI
-var modis_2023 = modis.filterDate('2016-01-01', '2024-11-30');
-var average_ndvi_2023 = modis_2023.mean().multiply(0.0001).clip(ROI);
+// Load data for a single year (2022) and calculate mean EVI
+var modis_2024 = modis.filterDate('2024-01-01', '2024-11-30');
+var average_ndvi_2024 = modis_2024.mean().multiply(0.0001).clip(ROI);
 
 // Visualization parameters
 var ndviVis = {
@@ -70,13 +72,13 @@ var ndviVis = {
   palette: ['blue', 'white', 'green'],
 };
 
-// Add the 2023 NDVI layer to the map
-Map.addLayer(average_ndvi_2023, ndviVis, 'Average NDVI (2023)');
+// Add the 2024 NDVI layer to the map
+Map.addLayer(average_ndvi_2024, ndviVis, 'Average NDVI (2024)');
 
-// Export the 2023 mean NDVI image to Google Drive
+// Export the 2024 mean NDVI image to Google Drive
 Export.image.toDrive({
-  image: average_ndvi_2023,
-  description: 'NDVI_2016_2024',
+  image: average_ndvi_2024,
+  description: 'NDVI_2024',
   folder: 'GEE',
   region: ROI,
   scale: 250,
