@@ -1,2 +1,4 @@
 # Drought-Monitoring-Nigeria
-Spatiotemporal Analysis of Drought in the Sahelian Region of Northeastern Nigeria, Sub-Saharan Africa
+Spatiotemporal Analysis of Drought in the Sahelian Region of Northeastern Nigeria, Sub-Saharan Africa.
+
+This study used Google Earth Engine (GEE) to analyze MODIS products (Moderate Resolution Imaging Spectroradiometer) (MOD13Q1 V6.1, MOD13A2, MOD11A2) and rainfall data from CHIRPS (Climate Hazards Group InfraRed Precipitation with Station data) (2001-2024) for calculating vegetation, drought, and climatic indices, including Normalized Difference Vegetation Index (NDVI), Enhanced Vegetation Index (EVI), Soil Adjusted Vegetation Index (SAVI), Temperature Condition Index (TCI), Vegetation Condition Index (VCI), Vegetation Health Index (VHI), and Standardized Precipitation Index (SPI). Trends in rainfall and all indices were assessed using Mann-Kendall and Sen’s slope tests. Change detection was performed using rule-based classification. Pearson, Spearman, and Kendall Tau tests were applied to evaluate the relationships between the indices and the drought phenomenon. Python was used for all statistical analyses.
