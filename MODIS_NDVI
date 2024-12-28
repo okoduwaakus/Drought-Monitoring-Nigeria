@@ -1,0 +1,84 @@
+// Load MODIS dataset and filter for the desired range (2001–2024)
+var modis = ee.ImageCollection("MODIS/061/MOD13Q1")
+  .select('NDVI')
+  .filterDate('2000-03-01', '2024-10-30');
+
+// Scale the NDVI values
+var scaled_ndvi = modis.map(function(image) {
+  return image.multiply(0.0001)
+    .copyProperties(image, ['system:time_start']);
+});
+
+// List of years
+var years = ee.List.sequence(2000, 2024);
+
+// Calculate annual mean NDVI for the ROI
+var annualMeanNDVI = years.map(function(year) {
+  year = ee.Number(year);
+  var annualCollection = scaled_ndvi.filter(ee.Filter.calendarRange(year, year, 'year'));
+  var annualMean = annualCollection.mean(); // Get annual mean image
+  
+  var meanNDVIValue = annualMean.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: ROI,
+    scale: 250,
+    maxPixels: 1e13
+  }).get('NDVI'); // Get the spatial mean value for the ROI
+  
+  return ee.Feature(null, {
+    'year': year,
+    'NDVI': meanNDVIValue
+  });
+});
+
+// Convert the list of features into a FeatureCollection
+var ndviFeatureCollection = ee.FeatureCollection(annualMeanNDVI);
+
+// Generate a chart of annual mean NDVI values for the ROI
+var ndviChart = ui.Chart.feature.byFeature({
+  features: ndviFeatureCollection,
+  xProperty: 'year',
+  yProperties: ['NDVI']
+})
+  .setOptions({
+    title: 'Annual Mean NDVI (2001–2024) in ROI',
+    hAxis: { title: 'Year', format: '####' },
+    vAxis: { title: 'Mean NDVI' },
+    lineWidth: 2,
+    pointSize: 4,
+    series: { 0: { color: 'green' } }
+  });
+
+// Print the chart
+print(ndviChart);
+
+// Export the annual mean NDVI data to a CSV file
+Export.table.toDrive({
+  collection: ndviFeatureCollection,
+  description: 'AnnualMeanNDVI_2001_2024',
+  fileFormat: 'CSV'
+});
+
+// Load data for a single year (2023) and calculate mean EVI
+var modis_2023 = modis.filterDate('2016-01-01', '2024-11-30');
+var average_ndvi_2023 = modis_2023.mean().multiply(0.0001).clip(ROI);
+
+// Visualization parameters
+var ndviVis = {
+  min: -1,
+  max: 1,
+  palette: ['blue', 'white', 'green'],
+};
+
+// Add the 2023 NDVI layer to the map
+Map.addLayer(average_ndvi_2023, ndviVis, 'Average NDVI (2023)');
+
+// Export the 2023 mean NDVI image to Google Drive
+Export.image.toDrive({
+  image: average_ndvi_2023,
+  description: 'NDVI_2016_2024',
+  folder: 'GEE',
+  region: ROI,
+  scale: 250,
+  maxPixels: 1e13
+});
