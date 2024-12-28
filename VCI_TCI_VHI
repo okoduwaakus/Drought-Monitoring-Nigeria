@@ -1,0 +1,152 @@
+//import the region of interest (geometry)
+
+Map.centerObject(geometry);
+
+var time_start = '2001-01-01', time_end = '2024-11-30';
+
+
+var ndvi = imageCollection.select('NDVI')
+  .filterDate(time_start, time_end);
+
+var temp = imageCollection2.select('LST_Day_1km')
+  .filterDate(time_start, time_end);
+
+// vci: vegetation condition index
+// ndvi, ndvi_min, ndvi_max
+// vci = (ndvi - ndvi_min)/(ndvi_max - ndvi_min)
+
+var ndvi_min = ndvi.min().multiply(0.0001);
+var ndvi_max = ndvi.max().multiply(0.0001);
+
+// temporal function to convert data into monthly format
+function temporal_collection(collection, start, count, interval, unit) {
+  var seq = ee.List.sequence(0, ee.Number(count).subtract(1));
+  var origin_date = ee.Date(start);
+  return ee.ImageCollection(seq.map(function(i) {
+    var start_date = origin_date.advance(ee.Number(interval).multiply(i), unit);
+    var end_date = origin_date.advance(ee.Number(interval).multiply(ee.Number(i).add(1)), unit);
+    return collection.filterDate(start_date, end_date).mean()
+      .set('system:time_start', start_date.millis())
+      .set('system:time_end', end_date.millis());
+  }));
+}
+
+// monthly ndvi image collection
+var ndvi_monthly = temporal_collection(ndvi, time_start, 276, 1, 'month');
+
+// vci
+var vci = ndvi_monthly.map(function(img) {
+  var index = img.expression('(ndvi - min) / (max - min)', {
+    'ndvi': img.select('NDVI').multiply(0.0001),
+    'min': ndvi_min,
+    'max': ndvi_max
+  });
+  return index.rename('VCI')
+    .copyProperties(img, img.propertyNames());
+});
+
+// tci: thermal condition index
+// lst_max, lst_min
+// tci = (max - lst) / (max - min)
+
+var temp_max = temp.max().multiply(0.02);
+var temp_min = temp.min().multiply(0.02);
+
+var temp_monthly = temporal_collection(temp, time_start, 276, 1, 'month');
+
+var tci = temp_monthly.map(function(img) {
+  var index = img.expression('(max - lst) / (max - min)', {
+    'max': temp_max,
+    'min': temp_min,
+    'lst': img.multiply(0.02)
+  });
+  return index.rename('TCI')
+    .copyProperties(img, img.propertyNames());
+});
+
+var modis_indices = vci.combine(tci);
+
+// vhi: vegetation health index
+// vci = 0.5 * vci + (1 - 0.5) * tci
+
+var drought = modis_indices.map(function(img) {
+  var vhi = img.expression('0.5 * vci + (1 - 0.5) * tci', {
+    'vci': img.select('VCI'),
+    'tci': img.select('TCI')
+  }).rename('VHI');
+  return img.addBands(vhi)
+    .copyProperties(img, img.propertyNames());
+});
+
+// Clip all images to the region of interest (geometry)
+var clippedDrought = drought.map(function(img) {
+  return img.clip(geometry);
+});
+
+// Print charts
+print(
+  ui.Chart.image.series(clippedDrought, geometry, ee.Reducer.mean(), 1000, 'system:time_start')
+);
+
+print(
+  ui.Chart.image.series(clippedDrought.select('VCI', 'TCI'), geometry, ee.Reducer.mean(), 1000, 'system:time_start')
+);
+
+print(
+  ui.Chart.image.series(clippedDrought.select('VHI'), geometry, ee.Reducer.mean(), 1000, 'system:time_start')
+);
+
+
+// Add the clipped drought (VHI) image to the map
+var vhiVis = {
+  min: 0,
+  max: 1,
+  palette: ['blue', 'white', 'red']
+};
+Map.addLayer(clippedDrought.select('VHI').mean(), vhiVis, 'Vegetation Health Index (VHI)');
+
+// Add the clipped VCI image to the map
+var vciVis = {
+  min: 0,
+  max: 1,
+  palette: ['green', 'yellow', 'red']
+};
+Map.addLayer(clippedDrought.select('VCI').mean(), vciVis, 'Vegetation Condition Index (VCI)');
+
+// Add the clipped TCI image to the map
+var tciVis = {
+  min: 0,
+  max: 1,
+  palette: ['blue', 'white', 'red']
+};
+Map.addLayer(clippedDrought.select('TCI').mean(), tciVis, 'Thermal Condition Index (TCI)');
+
+var average_2001 = clippedDrought.filterDate('2001-01-01', '2001-11-30')
+  .mean(); // Take the average of all data for 2001 or any other year
+
+Export.image.toDrive({
+  image: average_2001.select('VHI'),
+  description: 'modis_drought_vhi_average_2001',
+  scale: 1000,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13,
+  region: geometry
+});
+
+Export.image.toDrive({
+  image: average_2001.select('TCI'),
+  description: 'modis_drought_tci_average_2001',
+  scale: 1000,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13,
+  region: geometry
+});
+
+Export.image.toDrive({
+  image: average_2001.select('VCI'),
+  description: 'modis_drought_vci_average_2001',
+  scale: 1000,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13,
+  region: geometry
+});
