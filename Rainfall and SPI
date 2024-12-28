@@ -1,0 +1,79 @@
+//Import ROI (nigeriaROI)
+
+// Define the time range
+var startDate = '2001-01-01';
+var endDate = '2024-11-30';
+
+// Load CHIRPS data (PENTAD data)
+var chirpsYearly = ee.ImageCollection("UCSB-CHG/CHIRPS/PENTAD")
+  .filterDate(startDate, endDate)
+  .filterBounds(nigeriaROI);
+
+// Function to calculate SPI for each year
+function calculateSPI(chirpsYearly) {
+  // Calculate the long-term mean and standard deviation for each year
+  var yearlyStats = chirpsYearly
+    .reduce(ee.Reducer.mean())
+    .addBands(chirpsYearly.reduce(ee.Reducer.stdDev()));
+
+  // Calculate SPI for each image
+  return chirpsYearly.map(function(image) {
+    var anomaly = image.subtract(yearlyStats.select('precipitation_mean'));
+    var spi = anomaly.divide(yearlyStats.select('precipitation_stdDev'));
+    return spi.rename('SPI').set('system:time_start', image.get('system:time_start'));
+  });
+}
+
+// Calculate SPI for each year from 2001 to 2024
+var spiYearly = calculateSPI(chirpsYearly);
+
+// Aggregate SPI by year and total precipitation by year
+var years = ee.List.sequence(2001, 2024);
+
+// Create an empty list to store the annual SPI values and total precipitation
+var annualData = years.map(function(year) {
+  // Filter the yearly SPI values for each year
+  var yearSPI = spiYearly.filter(ee.Filter.calendarRange(year, year, 'year'))
+    .mean(); // Compute the annual mean SPI
+  
+  // Calculate total precipitation for the year
+  var totalPrecip = chirpsYearly.filter(ee.Filter.calendarRange(year, year, 'year'))
+    .sum(); // Compute the total precipitation for the year
+
+  // Create a feature with the year, mean SPI, and total precipitation
+  return ee.Feature(null, {
+    'year': year,
+    'SPI': yearSPI.reduceRegion({
+      reducer: ee.Reducer.mean(),
+      geometry: nigeriaROI,
+      scale: 5000
+    }).get('SPI'),
+    'total_precipitation': totalPrecip.reduceRegion({
+      reducer: ee.Reducer.mean(),
+      geometry: nigeriaROI,
+      scale: 5000
+    }).get('precipitation')
+  });
+});
+
+// Convert the list of features to a FeatureCollection
+var annualDataCollection = ee.FeatureCollection(annualData);
+
+// Create a chart of annual SPI and total precipitation from 2001 to 2024
+var chart = ui.Chart.feature.byFeature(annualDataCollection, 'year', ['SPI', 'total_precipitation'])
+  .setOptions({
+    title: 'Annual SPI and Total Precipitation from 2001 to 2024',
+    vAxis: {title: 'Value'},
+    hAxis: {title: 'Year'},
+    series: {
+      0: {targetAxisIndex: 0, lineWidth: 1, pointSize: 2, label: 'SPI'},
+      1: {targetAxisIndex: 1, lineWidth: 1, pointSize: 2, label: 'Total Precipitation (mm)'}
+    },
+    vAxes: {
+      0: {title: 'SPI', minValue: -2, maxValue: 2},
+      1: {title: 'Total Precipitation (mm)', minValue: 0}
+    }
+  });
+
+// Display the chart in the console
+print(chart);
