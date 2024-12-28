@@ -3,7 +3,7 @@
 // Load MODIS dataset, select the required band, and filter for the desired date range (2001–2024)
 var modis = ee.ImageCollection("MODIS/061/MOD13Q1")
   .select('EVI')
-  .filterDate('2001-01-01', '2024-12-31');
+  .filterDate('2001-01-01', '2024-12-30');
 
 // Scale the EVI values
 var scaled_evi = modis.map(function(image) {
@@ -62,7 +62,7 @@ Export.table.toDrive({
 });
 
 // Load data for a single year (2024) and calculate mean EVI
-var modis_2024 = modis.filterDate('2024-01-01', '20234-11-31');
+var modis_2024 = modis.filterDate('2024-01-01', '20234-11-30');
 var average_evi_2024 = modis_2023.mean().multiply(0.0001).clip(ROI);
 
 // Visualization parameters
