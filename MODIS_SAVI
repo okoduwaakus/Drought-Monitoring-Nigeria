@@ -1,0 +1,98 @@
+//Import ROI
+// Load MODIS dataset, select bands, and filter for the desired date range (2001–2024)
+var modis = ee.ImageCollection("MODIS/061/MOD13Q1")
+  .select(['sur_refl_b02', 'sur_refl_b01']) // Select NIR (sur_refl_b02) and RED (sur_refl_b01) bands
+  .filterDate('2000-01-01', '2024-11-31');
+
+// Define the soil adjustment factor (L)
+var L = 0.5;
+
+// Function to calculate SAVI for each image
+var calculateSAVI = function(image) {
+  var savi = image.expression(
+    '((NIR - RED) / (NIR + RED + L)) * (1 + L)', {
+      'NIR': image.select('sur_refl_b02'), // NIR band
+      'RED': image.select('sur_refl_b01'), // RED band
+      'L': L
+    }
+  ).rename('SAVI');
+  
+  return savi.copyProperties(image, ['system:time_start']);
+};
+
+// Apply SAVI calculation to the collection
+var saviCollection = modis.map(calculateSAVI);
+
+// List of years (2001 to 2024)
+var years = ee.List.sequence(2000, 2024);
+
+// Calculate annual mean SAVI for the ROI
+var annualMeanSAVI = years.map(function(year) {
+  year = ee.Number(year);
+  var annualCollection = saviCollection.filter(ee.Filter.calendarRange(year, year, 'year'));
+  var annualMean = annualCollection.mean(); // Get the annual mean image
+  
+  var meanSaviValue = annualMean.reduceRegion({
+    reducer: ee.Reducer.mean(),
+    geometry: ROI,
+    scale: 250,
+    maxPixels: 1e13
+  }).get('SAVI'); // Get the spatial mean value for the ROI
+  
+  return ee.Feature(null, {
+    'year': year,
+    'SAVI': meanSaviValue
+  });
+});
+
+// Convert the list of features into a FeatureCollection
+var saviFeatureCollection = ee.FeatureCollection(annualMeanSAVI);
+
+// Generate a chart of annual mean SAVI values for the ROI
+var saviChart = ui.Chart.feature.byFeature({
+  features: saviFeatureCollection,
+  xProperty: 'year',
+  yProperties: ['SAVI']
+})
+  .setOptions({
+    title: 'Annual Mean SAVI (2000–2024) in ROI',
+    hAxis: { title: 'Year', format: '####' },
+    vAxis: { title: 'Mean SAVI' },
+    lineWidth: 2,
+    pointSize: 4,
+    series: { 0: { color: 'brown' } }
+  });
+
+// Print the chart
+print(saviChart);
+
+// Export the annual mean SAVI data to a CSV file
+Export.table.toDrive({
+  collection: saviFeatureCollection,
+  description: 'AnnualMeanSAVI_2001_2024',
+  fileFormat: 'CSV'
+});
+
+// Load data for a single year (2024) and calculate mean SAVI
+var modis_2024 = modis.filterDate('2014-01-01', '2024-11-31');
+var average_savi_2024 = modis_2024.map(calculateSAVI).mean().clip(ROI);
+
+// Visualization parameters for SAVI
+var saviVis = {
+  min: 0,
+  max: 1,
+  palette: ['blue', 'white', 'green', 'yellow', 'brown'],
+};
+
+// Add the 2024 SAVI layer to the map
+Map.addLayer(average_savi_2024, saviVis, 'Average SAVI (2024)');
+
+// Export the 2024 mean SAVI image to Google Drive
+Export.image.toDrive({
+  image: average_savi_2024,
+  description: 'SAVI_2024',
+  folder: 'GEE',
+  region: ROI,
+  scale: 250,
+  maxPixels: 1e13
+});
